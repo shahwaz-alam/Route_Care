@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>RouteCare — Emergency Monitor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body{background:var(--grey-100)}
+    #map{height:260px;border-radius:var(--radius-md);z-index:1}
+    .emergency-layout{display:grid;grid-template-columns:1fr 370px;gap:20px;align-items:start}
+    @media(max-width:950px){.emergency-layout{grid-template-columns:1fr}}
+    .vitals-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+    @media(max-width:700px){.vitals-grid{grid-template-columns:repeat(2,1fr)}}
+    .vc{background:white;border:1px solid var(--grey-200);border-radius:var(--radius-md);padding:16px;text-align:center;position:relative;overflow:hidden;transition:transform .2s}
+    .vc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--blue)}
+    .vc.warn::before{background:var(--moderate)}
+    .vc.crit::before{background:var(--critical)}
+    .vc:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+    .v-icon{font-size:1.4rem;margin-bottom:6px}
+    .v-lbl{font-size:.7rem;color:var(--grey-400);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px}
+    .v-val{font-family:var(--font-head);font-size:1.7rem;font-weight:700;line-height:1;color:var(--dark)}
+    .v-unit{font-size:.7rem;color:var(--grey-400);margin-top:3px}
+    .v-status{font-size:.7rem;font-weight:700;margin-top:5px}
+    .ok{color:var(--stable)}.warn-c{color:var(--moderate)}.err{color:var(--critical)}
+    .pulse-anim{animation:pulse-beat 1.2s infinite ease-in-out}
+    @keyframes pulse-beat{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+
+    .ai-card{background:white;border:1px solid var(--grey-200);border-radius:var(--radius-md);padding:18px}
+    .ai-row{display:flex;gap:16px;align-items:flex-start}
+    .score-ring{width:88px;height:88px;position:relative;flex-shrink:0}
+    .score-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+    .score-ring .lbl{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .score-ring .num{font-family:var(--font-head);font-size:1.4rem;font-weight:700;line-height:1}
+    .score-ring .sub{font-size:.6rem;color:var(--grey-400)}
+    .cond-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:700;text-transform:uppercase}
+    .cond-stable{background:var(--stable-bg);color:var(--stable)}.cond-moderate{background:var(--moderate-bg);color:var(--moderate)}.cond-critical{background:var(--critical-bg);color:var(--critical)}
+    .cond-critical::before{content:'●';animation:blink .7s infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+    .ai-exp{background:var(--grey-50);border:1px solid var(--grey-200);border-radius:8px;padding:12px;font-size:.83rem;line-height:1.65;color:var(--grey-800);margin-top:10px}
+    .ai-lbl{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px}
+
+    /* Hospital cards */
+    .hosp-item{border:1.5px solid var(--grey-200);border-radius:var(--radius-md);padding:14px 16px;background:white;display:flex;align-items:center;gap:12px;margin-bottom:10px;cursor:pointer;transition:all .2s;position:relative}
+    .hosp-item:hover{border-color:var(--blue);box-shadow:0 4px 16px rgba(59,130,246,.12);transform:translateY(-1px)}
+    .hosp-item.recommended{border-color:var(--blue);background:linear-gradient(135deg,#EFF6FF,#DBEAFE)}
+    .hosp-item.preferred-hosp{border-color:#7C3AED;background:linear-gradient(135deg,#F5F3FF,#EDE9FE)}
+    .preferred-badge{position:absolute;top:-10px;right:14px;background:#7C3AED;color:white;font-size:.62rem;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:10px}
+    .hosp-item.recommended::after{content:'AI RECOMMENDED';position:absolute;top:-10px;right:14px;background:var(--blue);color:white;font-size:.62rem;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:10px}
+    .h-rank{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;flex-shrink:0}
+    .r0{background:#7C3AED;color:white}
+    .r1{background:var(--blue);color:white}.r2{background:var(--grey-200);color:var(--grey-600)}.r3{background:var(--grey-100);color:var(--grey-400)}
+    .h-name{font-weight:700;font-size:.92rem;color:var(--dark)}
+    .h-addr{font-size:.75rem;color:var(--grey-400);margin-top:2px}
+    .h-meta{display:flex;gap:14px;margin-left:auto;flex-shrink:0}
+    .h-stat{text-align:center}
+    .h-stat .sv{font-weight:700;font-size:.9rem;color:var(--dark)}
+    .h-stat .sv.blue{color:var(--blue)}.h-stat .sv.g{color:var(--stable)}.h-stat .sv.y{color:var(--moderate)}.h-stat .sv.r{color:var(--critical)}
+    .h-stat .sk{font-size:.67rem;color:var(--grey-400);text-transform:uppercase}
+    .spec-tag{background:var(--blue-light);color:var(--blue-dark);border-radius:4px;padding:2px 7px;font-size:.67rem;font-weight:600;margin-right:4px;margin-top:4px;display:inline-block}
+
+    /* Reroute inline option */
+    .reroute-inline{display:none;background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:8px;padding:10px 14px;margin-top:6px;gap:10px;align-items:center;flex-wrap:wrap}
+    .reroute-inline.show{display:flex}
+
+    /* Critical alarm */
+    .alarm-banner{display:none;background:linear-gradient(135deg,#7F1D1D,#991B1B);border-radius:var(--radius-md);padding:14px 18px;margin-bottom:16px;align-items:center;gap:14px}
+    .alarm-banner.show{display:flex;animation:flash-bg 1s ease-in-out infinite alternate}
+    @keyframes flash-bg{0%{background:linear-gradient(135deg,#7F1D1D,#991B1B)}100%{background:linear-gradient(135deg,#991B1B,#B91C1C)}}
+    .alarm-icon{font-size:2rem;animation:shake .4s infinite alternate}
+    @keyframes shake{0%{transform:rotate(-5deg)}100%{transform:rotate(5deg)}}
+
+    /* Search bar */
+    .search-bar-wrap{display:flex;gap:8px;margin-bottom:12px}
+    .search-bar-wrap input{flex:1;padding:8px 14px;border:1.5px solid var(--grey-200);border-radius:8px;font-size:.85rem}
+    .search-bar-wrap input:focus{outline:none;border-color:var(--blue)}
+    .search-bar-wrap button{background:var(--blue);color:white;border:none;border-radius:8px;padding:8px 14px;font-size:.85rem;cursor:pointer;font-weight:600}
+
+    /* Modal */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;align-items:center;justify-content:center}
+    .modal-overlay.open{display:flex}
+    .modal-box{background:white;border-radius:var(--radius-xl);width:90%;max-width:620px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3)}
+    .modal-header{padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--grey-200);padding-bottom:14px}
+    .modal-body{padding:20px 24px}
+    .modal-close{background:var(--grey-100);border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1.1rem;display:flex;align-items:center;justify-content:center}
+    .modal-tabs{display:flex;gap:4px;background:var(--grey-100);border-radius:8px;padding:3px;margin-bottom:18px}
+    .mtab{flex:1;padding:7px;border:none;background:transparent;border-radius:6px;font-size:.82rem;font-weight:600;color:var(--grey-400);cursor:pointer;transition:all .15s}
+    .mtab.active{background:white;color:var(--blue);box-shadow:var(--shadow-sm)}
+    .mtab-pane{display:none}.mtab-pane.active{display:block}
+    .eq-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    .eq-card{background:var(--grey-50);border:1px solid var(--grey-200);border-radius:8px;padding:12px;display:flex;align-items:center;gap:10px}
+    .eq-val{font-family:var(--font-head);font-size:1.5rem;font-weight:700;color:var(--blue)}
+    .eq-lbl{font-size:.75rem;color:var(--grey-600)}
+    .fac-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--grey-100)}
+    .fac-row:last-child{border-bottom:none}
+    .pill-yes{background:var(--stable-bg);color:var(--stable);border-radius:20px;padding:3px 10px;font-size:.72rem;font-weight:700}
+    .pill-no{background:var(--critical-bg);color:var(--critical);border-radius:20px;padding:3px 10px;font-size:.72rem;font-weight:700}
+    .doc-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--grey-100)}
+    .doc-row:last-child{border-bottom:none}
+    .doc-avatar{width:36px;height:36px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;color:var(--blue-dark);flex-shrink:0}
+    .duty-badge{margin-left:auto;border-radius:20px;padding:3px 10px;font-size:.72rem;font-weight:700}
+    .on-duty{background:var(--stable-bg);color:var(--stable)}
+    .off-duty{background:var(--grey-100);color:var(--grey-400)}
+
+    /* Sidebar */
+    .sidebar-panel{display:flex;flex-direction:column;gap:16px}
+    .section-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--grey-400);margin-bottom:10px;display:flex;align-items:center;gap:10px}
+    .section-label::after{content:'';flex:1;height:1px;background:var(--grey-200)}
+    .action-row{display:flex;gap:10px;margin-top:16px}
+    .action-row .btn{flex:1}
+    .live-pill{display:inline-flex;align-items:center;gap:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:20px;padding:4px 12px;font-size:.72rem;font-weight:700;color:var(--critical);text-transform:uppercase;letter-spacing:1px}
+    .live-dot{width:7px;height:7px;border-radius:50%;background:var(--critical);animation:blink .7s infinite}
+    .toast{position:fixed;bottom:24px;right:24px;background:var(--dark);color:white;border-radius:12px;padding:13px 18px;font-size:.87rem;font-weight:500;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow-lg);transform:translateY(80px);opacity:0;transition:all .3s;z-index:500;border-left:4px solid var(--stable)}
+    .toast.show{transform:translateY(0);opacity:1}
+    .toast.info{border-left-color:var(--blue)}
+    .toast.warn{border-left-color:var(--critical)}
+    .eta-badge{background:var(--dark);color:var(--lime);border-radius:8px;padding:5px 12px;font-family:var(--font-head);font-size:.95rem;font-weight:700}
+
+    /* Ambulance icon on route bar — moves right→left (current loc → hospital) */
+    .route-amb-moving{position:absolute;top:-11px;animation:move-amb 3s linear infinite}
+    @keyframes move-amb{0%{left:calc(100% - 22px)}100%{left:0}}
+
+    /* Hospital request status */
+    .req-status-box{background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:10px;padding:12px 16px;margin-bottom:12px;font-size:.84rem}
+    .req-status-box.accepted{background:#F0FDF4;border-color:#86EFAC}
+    .req-status-box.declined{background:#FEF2F2;border-color:#FECACA}
+  </style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand"><div class="brand-icon">🚑</div>Route<span class="accent">Care</span></div>
+  <div class="nav-links">
+    <span class="live-pill"><span class="live-dot"></span>LIVE</span>
+    <div class="nav-user"><div class="avatar">{{ session.user_id[0] }}</div><span>{{ session.user_id }}</span></div>
+    <a href="/audit" target="_blank" style="background:var(--grey-100);border:1px solid var(--grey-200);border-radius:8px;padding:6px 13px;font-size:.78rem;color:var(--grey-600);text-decoration:none;font-weight:600">📋 Audit Log</a>
+    <a href="/logout" class="btn-logout">End Session</a>
+  </div>
+</nav>
+
+<!-- Patient bar -->
+<div style="padding:16px 24px 0">
+  <div class="patient-bar">
+    <div class="patient-avatar">🧑</div>
+    <div>
+      <div class="patient-name">{{ patient.name }}</div>
+      <div style="font-size:.73rem;color:rgba(255,255,255,.45);margin-top:2px">{{ patient.emergency }}</div>
+    </div>
+    <div class="patient-details">
+      <span class="patient-chip">{{ patient.age }}y · {{ patient.gender }}</span>
+      <span class="patient-chip blood">🩸 {{ patient.blood_group }}</span>
+      {% if patient.conditions %}<span class="patient-chip">⚠ {{ patient.conditions[:35] }}</span>{% endif %}
+      {% if patient.symptoms %}<span class="patient-chip">🩺 {{ patient.symptoms[:40] }}{% if patient.symptoms|length>40 %}…{% endif %}</span>{% endif %}
+      {% if patient.preferred_hospital %}<span class="patient-chip" style="background:rgba(124,58,237,.3);border-color:rgba(124,58,237,.5)">🏥 {{ patient.preferred_hospital[:30] }}</span>{% endif %}
+    </div>
+    <button onclick="refreshVitals()" id="refreshBtn" style="margin-left:auto;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:white;border-radius:8px;padding:7px 14px;font-size:.8rem;cursor:pointer;display:flex;align-items:center;gap:6px">
+      ↺ Refresh Vitals
+    </button>
+  </div>
+</div>
+
+<div class="page-wrapper" style="max-width:1240px">
+<div class="emergency-layout">
+
+  <!-- LEFT -->
+  <div>
+    <!-- CRITICAL ALARM BANNER -->
+    <div class="alarm-banner" id="alarmBanner">
+      <div class="alarm-icon">🚨</div>
+      <div>
+        <div style="color:white;font-weight:700;font-size:.95rem">CRITICAL CONDITION DETECTED</div>
+        <div style="color:rgba(255,255,255,.75);font-size:.8rem;margin-top:2px">Patient vitals are critical — nearest hospitals shown below. Immediate rerouting recommended.</div>
+      </div>
+      <button onclick="document.getElementById('alarmBanner').classList.remove('show')" style="margin-left:auto;background:rgba(255,255,255,.15);border:none;color:white;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:.8rem;flex-shrink:0">Dismiss</button>
+    </div>
+
+    <div class="section-label">Live Vitals</div>
+    <div class="vitals-grid" id="vitalsGrid">
+      <div class="vc {% if vitals.hr < 60 or vitals.hr > 110 %}crit{% endif %}">
+        <div class="v-icon pulse-anim">❤️</div>
+        <div class="v-lbl">Heart Rate</div>
+        <div class="v-val" id="vhr">{{ vitals.hr }}</div>
+        <div class="v-unit">bpm</div>
+        <div class="v-status {% if vitals.hr < 60 %}err{% elif vitals.hr > 110 %}err{% else %}ok{% endif %}" id="hrS">{% if vitals.hr < 60 %}LOW{% elif vitals.hr > 110 %}HIGH{% else %}NORMAL{% endif %}</div>
+      </div>
+      <div class="vc {% if vitals.bp_sys < 90 or vitals.bp_sys > 160 %}crit{% elif vitals.bp_sys < 100 or vitals.bp_sys > 140 %}warn{% endif %}">
+        <div class="v-icon">🩸</div>
+        <div class="v-lbl">Blood Pressure</div>
+        <div class="v-val" id="vbp">{{ vitals.bp_sys }}/{{ vitals.bp_dia }}</div>
+        <div class="v-unit">mmHg</div>
+        <div class="v-status {% if vitals.bp_sys < 90 %}err{% elif vitals.bp_sys > 160 %}err{% elif vitals.bp_sys < 100 or vitals.bp_sys > 140 %}warn-c{% else %}ok{% endif %}" id="bpS">{% if vitals.bp_sys < 90 %}LOW{% elif vitals.bp_sys > 160 %}HIGH{% else %}NORMAL{% endif %}</div>
+      </div>
+      <div class="vc {% if vitals.spo2 < 90 %}crit{% elif vitals.spo2 < 95 %}warn{% endif %}">
+        <div class="v-icon">🫁</div>
+        <div class="v-lbl">SpO2</div>
+        <div class="v-val" id="vspo2">{{ vitals.spo2 }}</div>
+        <div class="v-unit">%</div>
+        <div class="v-status {% if vitals.spo2 < 90 %}err{% elif vitals.spo2 < 95 %}warn-c{% else %}ok{% endif %}" id="spo2S">{% if vitals.spo2 < 90 %}CRITICAL{% elif vitals.spo2 < 95 %}LOW{% else %}NORMAL{% endif %}</div>
+      </div>
+      <div class="vc {% if vitals.temp < 35 or vitals.temp > 40 %}crit{% elif vitals.temp < 36 or vitals.temp > 38.5 %}warn{% endif %}">
+        <div class="v-icon">🌡️</div>
+        <div class="v-lbl">Temperature</div>
+        <div class="v-val" id="vtemp">{{ vitals.temp }}</div>
+        <div class="v-unit">°C</div>
+        <div class="v-status {% if vitals.temp < 35 or vitals.temp > 40 %}err{% elif vitals.temp < 36 or vitals.temp > 38.5 %}warn-c{% else %}ok{% endif %}" id="tempS">{% if vitals.temp < 36 %}LOW{% elif vitals.temp > 38.5 %}FEVER{% else %}NORMAL{% endif %}</div>
+      </div>
+    </div>
+
+    <div class="section-label">AI Decision Engine</div>
+    <div class="ai-card" id="aiCard">
+      <div class="ai-row">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0">
+          <div class="score-ring">
+            <svg viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="38" fill="none" stroke="var(--grey-200)" stroke-width="8"/>
+              <circle id="scoreArc" cx="50" cy="50" r="38" fill="none"
+                stroke="{{ '#22C55E' if ai.condition_color=='stable' else '#F59E0B' if ai.condition_color=='moderate' else '#EF4444' }}"
+                stroke-width="8" stroke-linecap="round" stroke-dasharray="239"
+                stroke-dashoffset="{{ (239 - (239 * ai.stability_score / 100))|int }}"/>
+            </svg>
+            <div class="lbl">
+              <span class="num" id="scoreNum">{{ ai.stability_score }}</span>
+              <span class="sub">/ 100</span>
+            </div>
+          </div>
+          <span class="cond-badge cond-{{ ai.condition_color }}" id="condBadge">{{ ai.condition }}</span>
+        </div>
+        <div style="flex:1">
+          <div class="ai-lbl">🤖 AI Analysis</div>
+          <div class="ai-exp" id="aiExp">{{ ai.explanation }}</div>
+        </div>
+      </div>
+    </div>
+
+    {% if ai.guardrails %}
+    <div style="margin-top:14px">
+      {% for g in ai.guardrails %}
+      <div style="border-radius:8px;padding:10px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start;background:{% if g.severity=='CRITICAL' %}#FEF2F2;border:1.5px solid #FECACA{% else %}#FFFBEB;border:1.5px solid #FDE68A{% endif %}">
+        <span style="font-size:1.1rem;flex-shrink:0">{% if g.severity=='CRITICAL' %}🚨{% else %}⚠️{% endif %}</span>
+        <div>
+          <div style="font-size:.75rem;font-weight:700;color:{% if g.severity=='CRITICAL' %}#991B1B{% else %}#92400E{% endif %};text-transform:uppercase;letter-spacing:.5px">{{ g.severity }} — {{ g.name }} <span style="font-weight:400;opacity:.7">[ICD-10: {{ g.icd10 }}]</span></div>
+          <div style="font-size:.81rem;color:var(--grey-800);margin-top:3px;line-height:1.5">{{ g.message }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if ai.edge_flags %}
+    {% for flag, advisory in ai.edge_flags.items() %}
+    <div style="background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:8px;padding:10px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start">
+      <span style="font-size:1.1rem;flex-shrink:0">🔀</span>
+      <div>
+        <div style="font-size:.73rem;font-weight:700;color:#9A3412;text-transform:uppercase;letter-spacing:.5px">EDGE CASE — {{ flag.replace('_',' ') }}</div>
+        <div style="font-size:.81rem;color:var(--grey-800);margin-top:3px;line-height:1.5">{{ advisory }}</div>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <details style="margin-bottom:16px;margin-top:8px">
+      <summary style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--grey-400);cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px">
+        <span>▶</span> Score Breakdown &amp; Agent Steps
+      </summary>
+      <div style="margin-top:10px;background:var(--grey-50);border:1px solid var(--grey-200);border-radius:8px;padding:12px">
+        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--blue);margin-bottom:8px">Vital-by-vital scoring</div>
+        {% for line in ai.score_breakdown %}
+        <div style="font-size:.8rem;color:var(--grey-700);padding:3px 0;border-bottom:1px solid var(--grey-100)">{{ line }}</div>
+        {% endfor %}
+        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--blue);margin-top:12px;margin-bottom:8px">Agent execution trace</div>
+        {% for step in ai.agent_steps %}
+        <div style="font-size:.78rem;color:var(--grey-600);padding:2px 0">✓ {{ step }}</div>
+        {% endfor %}
+      </div>
+    </details>
+
+    <!-- ═══ HOSPITAL REQUEST STATUS ═══ -->
+    <div id="reqStatusBox" style="display:none"></div>
+
+    <!-- ═══ PREFERRED HOSPITAL (always shown first) ═══ -->
+    {% if patient.preferred_hospital %}
+    <div class="section-label" style="margin-top:20px">
+      Destination Hospital
+      <span style="font-size:.7rem;color:#7C3AED;font-weight:500;text-transform:none;letter-spacing:0">(user selected)</span>
+    </div>
+    <!-- Search bar — always visible above destination -->
+    <div class="search-bar-wrap" id="hospSearchWrap" style="margin-bottom:10px">
+      <input type="text" id="hospSearch" placeholder="🔍 Search hospital by name during transit…" oninput="filterHospitals(this.value)"/>
+      <button onclick="filterHospitals(document.getElementById('hospSearch').value)">Search</button>
+    </div>
+    <div id="preferredHospCard">
+      <div class="hosp-item preferred-hosp" style="cursor:default;margin-bottom:16px">
+        <span class="preferred-badge">YOUR CHOICE</span>
+        <div class="h-rank r0">★</div>
+        <div>
+          <div class="h-name">{{ patient.preferred_hospital }}</div>
+          <div class="h-addr">📍 User-specified destination</div>
+          <div style="margin-top:6px">
+            <span style="background:#EDE9FE;color:#7C3AED;border-radius:4px;padding:2px 8px;font-size:.68rem;font-weight:600">Preferred Destination</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Search bar (no preferred hospital case) — always visible -->
+    {% if not patient.preferred_hospital %}
+    <div class="search-bar-wrap" id="hospSearchWrap" style="margin-top:20px;margin-bottom:10px">
+      <input type="text" id="hospSearch" placeholder="🔍 Search hospital by name during transit…" oninput="filterHospitals(this.value)"/>
+      <button onclick="filterHospitals(document.getElementById('hospSearch').value)">Search</button>
+    </div>
+    {% endif %}
+
+    <!-- ═══ AI RECOMMENDED HOSPITALS (ONLY shown when condition is critical) ═══ -->
+    <div class="section-label" id="aiHospLabel" style="margin-top:{% if patient.preferred_hospital %}4px{% else %}4px{% endif %};display:{% if is_critical %}flex{% else %}none{% endif %}">
+      {% if patient.preferred_hospital %}Nearest Hospitals — AI Ranked{% else %}Hospital Recommendations{% endif %}
+      <span style="font-size:.7rem;color:var(--blue);font-weight:500;text-transform:none;letter-spacing:0" id="criticalNote">
+        ⚠ Critical — immediate alternatives shown
+      </span>
+    </div>
+
+
+
+    <div id="hospitalsList" style="display:{% if is_critical %}block{% else %}none{% endif %}">
+      {% for i, h in enumerate(ai.hospitals_ranked[:3]) %}
+      <div class="hosp-item {% if h.id == ai.recommended_hospital_id and not patient.preferred_hospital %}recommended{% endif %}"
+           onclick="openHospital('{{ h.id }}')" id="hcard-{{ h.id }}">
+        <div class="h-rank r{{ i+1 }}">{{ i+1 }}</div>
+        <div>
+          <div class="h-name">{{ h.name }}</div>
+          <div class="h-addr">📍 {{ h.address }}</div>
+          <div style="margin-top:4px">{% for s in h.specialties %}<span class="spec-tag">{{ s }}</span>{% endfor %}</div>
+          {% if h.selection_reason %}
+          <div style="font-size:.69rem;color:var(--grey-400);margin-top:5px;font-style:italic">{{ h.selection_reason[:120] }}{% if h.selection_reason|length > 120 %}…{% endif %}</div>
+          {% endif %}
+        </div>
+        <div class="h-meta">
+          <div class="h-stat"><div class="sv">{{ h.distance_km }} km</div><div class="sk">Distance</div></div>
+          <div class="h-stat"><div class="sv blue">{{ h.eta_minutes }} min</div><div class="sk">ETA</div></div>
+          <div class="h-stat"><div class="sv {% if h.icu_beds >= 6 %}g{% elif h.icu_beds >= 3 %}y{% else %}r{% endif %}">{{ h.icu_beds }}</div><div class="sk">ICU</div></div>
+          <div class="h-stat"><div class="sv">{{ h.ventilators }}</div><div class="sk">Vents</div></div>
+        </div>
+      </div>
+      <!-- Reroute inline panel (for 2nd hospital) -->
+      {% if i == 1 %}
+      <div class="reroute-inline" id="reroutePanel-{{ h.id }}">
+        <span style="font-size:.85rem;font-weight:600;color:#166534">Reroute to <strong>{{ h.name }}</strong>?</span>
+        <button onclick="confirmReroute('{{ h.id }}','{{ h.name }}')" style="background:var(--stable);color:white;border:none;border-radius:7px;padding:6px 14px;font-size:.82rem;font-weight:700;cursor:pointer">✅ Reroute to this hospital</button>
+        <button onclick="hideReroutePanel('{{ h.id }}')" style="background:var(--grey-100);border:none;border-radius:7px;padding:6px 12px;font-size:.82rem;cursor:pointer">Cancel</button>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="action-row" id="actionRow" style="display:none"></div>
+  </div>
+
+  <!-- RIGHT SIDEBAR -->
+  <div class="sidebar-panel">
+    <div class="section-label">Live Route Map</div>
+    <div id="map"></div>
+
+    <!-- Route indicator with ambulance icon -->
+    <div class="card" style="padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-size:.78rem;font-weight:600;color:var(--grey-600)">Route to recommended hospital</span>
+        <span class="eta-badge" id="sideEta">ETA {{ ai.hospitals_ranked[0].eta_minutes }} min</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="width:10px;height:10px;border-radius:50%;background:var(--stable);flex-shrink:0"></div>
+        <div style="flex:1;height:2px;background:repeating-linear-gradient(90deg,var(--blue) 0,var(--blue) 6px,transparent 6px,transparent 12px);position:relative;overflow:visible">
+          <!-- Ambulance moves from right (current loc) toward left (hospital) -->
+          <div class="route-amb-moving" title="Ambulance">🚑</div>
+        </div>
+        <div style="width:10px;height:10px;border-radius:50%;background:var(--critical);box-shadow:0 0 0 3px rgba(239,68,68,.2);animation:blink .8s infinite;flex-shrink:0"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--grey-400);margin-top:5px">
+        <span id="destLabel">🏥 {% if patient.preferred_hospital %}{{ patient.preferred_hospital[:22] }}{% else %}{{ ai.hospitals_ranked[0].name[:20] }}{% endif %}…</span>
+        <span>📍 Current location</span>
+      </div>
+    </div>
+
+    {% set rec = ai.hospitals_ranked[0] %}
+    {% set dest_name = patient.preferred_hospital if patient.preferred_hospital else rec.name %}
+    {% set dest_addr = 'User-specified destination' if patient.preferred_hospital else rec.address %}
+    <div class="card" style="background:linear-gradient(135deg,#EFF6FF,#DBEAFE)" id="recCard">
+      <div class="card-title" style="margin-bottom:8px">{% if patient.preferred_hospital %}🏥 Current Destination{% else %}✅ AI Recommended Destination{% endif %}</div>
+      <div style="font-weight:700;font-size:.98rem;color:var(--dark);margin-bottom:3px" id="recName">{{ dest_name }}</div>
+      <div style="font-size:.76rem;color:var(--grey-600);margin-bottom:12px" id="recAddr">📍 {{ dest_addr }}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.8rem">
+        <div style="background:white;border-radius:8px;padding:8px;text-align:center"><div style="font-weight:700;font-size:1.1rem;color:var(--blue)" id="recIcu">{{ rec.icu_beds }}</div><div style="color:var(--grey-400)">ICU Beds</div></div>
+        <div style="background:white;border-radius:8px;padding:8px;text-align:center"><div style="font-weight:700;font-size:1.1rem;color:var(--blue)" id="recVents">{{ rec.ventilators }}</div><div style="color:var(--grey-400)">Ventilators</div></div>
+      </div>
+      <div style="margin-top:10px;font-size:.76rem;color:var(--blue-dark);font-weight:500" id="recContact">📞 {{ rec.contact }}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px">📊 Session Stats</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;font-size:.82rem"><span style="color:var(--grey-400)">AI Score</span><span style="font-weight:700;color:var(--blue)" id="sideScore">{{ ai.stability_score }}%</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:.82rem"><span style="color:var(--grey-400)">Condition</span><span class="cond-badge cond-{{ ai.condition_color }}" style="font-size:.68rem;padding:2px 9px" id="sideCond">{{ ai.condition }}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:.82rem"><span style="color:var(--grey-400)">Hospitals</span><span style="font-weight:700">{{ ai.hospitals_ranked|length }}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:.82rem"><span style="color:var(--grey-400)">Best ETA</span><span style="font-weight:700;color:var(--stable)" id="sideEtaStat">{{ ai.hospitals_ranked[0].eta_minutes }} min</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- Hospital Detail Modal -->
+<div class="modal-overlay" id="hospModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div id="mHospName" style="font-family:var(--font-head);font-size:1.1rem;font-weight:700;color:var(--dark)"></div>
+        <div id="mHospAddr" style="font-size:.78rem;color:var(--grey-400);margin-top:2px"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-tabs">
+        <button class="mtab active" onclick="switchMTab('overview',this)">Overview</button>
+        <button class="mtab" onclick="switchMTab('equipment',this)">Equipment</button>
+        <button class="mtab" onclick="switchMTab('facilities',this)">Facilities</button>
+        <button class="mtab" onclick="switchMTab('doctors',this)">Doctors</button>
+      </div>
+      <div id="pane-overview" class="mtab-pane active">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px" id="mOverviewStats"></div>
+        <div id="mSpecialties"></div>
+        <div style="margin-top:12px;font-size:.82rem;color:var(--grey-600)" id="mContact"></div>
+        <div style="margin-top:14px;display:flex;gap:8px" id="mActions"></div>
+      </div>
+      <div id="pane-equipment" class="mtab-pane"><div class="eq-grid" id="mEquipment"></div></div>
+      <div id="pane-facilities" class="mtab-pane"><div id="mFacilities"></div></div>
+      <div id="pane-doctors" class="mtab-pane"><div id="mDoctors"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── GLOBALS ──────────────────────────────────────────────────
+let hospitals = {{ hospitals | tojson }};
+let allHospitalsCache = hospitals.slice();
+let mapMarkers = [];
+let isCritical = {{ 'true' if is_critical else 'false' }};
+let hidingRecommended = false;
+let currentRequestHospitalId = null;
+let requestPollInterval = null;
+let activeModalHid = null;
+
+const preferredHospital = "{{ patient.preferred_hospital | default('') }}";
+let criticalShownOnce = {{ 'true' if is_critical else 'false' }};
+
+// ── MAP INIT ──────────────────────────────────────────────────
+const ambLat = {{ patient.pickup_lat or 13.0674 }};
+const ambLng = {{ patient.pickup_lng or 80.2376 }};
+const map = L.map('map').setView([ambLat, ambLng], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(map);
+
+const ambIcon = L.divIcon({html:'<div style="background:#EF4444;color:white;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.3)">🚑</div>',iconSize:[34,34],className:''});
+L.marker([ambLat,ambLng],{icon:ambIcon}).addTo(map).bindPopup('🚑 Ambulance (You)');
+
+function clearHospitalMarkers(){mapMarkers.forEach(m=>map.removeLayer(m));mapMarkers=[];}
+
+function addHospitalMarkers(hospList, recId){
+  clearHospitalMarkers();
+  hospList.forEach(h=>{
+    const isRec=h.id===recId;
+    const hIcon=L.divIcon({html:`<div style="background:${isRec?'#3B82F6':'#64748B'};color:white;border-radius:8px;padding:4px 7px;font-size:11px;font-weight:700;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,.25);white-space:nowrap">${isRec?'★ ':''}${h.name.substring(0,12)}…</div>`,className:''});
+    const marker=L.marker([h.lat,h.lng],{icon:hIcon}).addTo(map);
+    marker.bindPopup(`<b>${h.name}</b><br>📍 ${h.address}<br>🚗 ${h.distance_km} km · ⏱ ${h.eta_minutes} min<br>🛏 ICU: ${h.icu_beds}`);
+    marker.on('click',()=>openHospital(h.id));
+    mapMarkers.push(marker);
+    if(isRec){
+      const line=L.polyline([[ambLat,ambLng],[h.lat,h.lng]],{color:'#3B82F6',weight:3,dashArray:'8 6',opacity:.8}).addTo(map);
+      mapMarkers.push(line);
+    }
+  });
+}
+addHospitalMarkers(hospitals,'{{ ai.recommended_hospital_id }}');
+
+// ── HOSPITAL MODAL ──────────────────────────────────────────
+function openHospital(hid){
+  activeModalHid = hid;
+  fetch(`/api/hospital/${hid}`).then(r=>r.json()).then(h=>{
+    document.getElementById('mHospName').textContent=h.name;
+    document.getElementById('mHospAddr').textContent='📍 '+h.address;
+    const os=document.getElementById('mOverviewStats');
+    os.innerHTML=`
+      <div style="background:var(--blue-light);border-radius:8px;padding:12px;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--blue)">${h.icu_beds}</div><div style="font-size:.72rem;color:var(--grey-400)">ICU Beds</div></div>
+      <div style="background:#F0FDF4;border-radius:8px;padding:12px;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--stable)">${h.ventilators}</div><div style="font-size:.72rem;color:var(--grey-400)">Ventilators</div></div>
+      <div style="background:#FFFBEB;border-radius:8px;padding:12px;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--moderate)">${h.eta_minutes} min</div><div style="font-size:.72rem;color:var(--grey-400)">ETA</div></div>`;
+    document.getElementById('mSpecialties').innerHTML=(h.specialties||[]).map(s=>`<span class="spec-tag" style="font-size:.75rem;padding:4px 10px;margin-right:5px">${s}</span>`).join('');
+    document.getElementById('mContact').innerHTML=`📞 ${h.contact} &nbsp;·&nbsp; ⭐ ${h.rating} rating &nbsp;·&nbsp; 📏 ${h.distance_km} km`;
+    document.getElementById('mEquipment').innerHTML=Object.entries(h.equipment||{}).map(([k,v])=>`<div class="eq-card"><div class="eq-val">${v}</div><div class="eq-lbl">${k}</div></div>`).join('');
+    document.getElementById('mFacilities').innerHTML=Object.entries(h.facilities||{}).map(([k,v])=>`<div class="fac-row"><span style="font-size:.85rem;font-weight:500">${k}</span><span class="${v?'pill-yes':'pill-no'}">${v?'Available':'Unavailable'}</span></div>`).join('');
+    document.getElementById('mDoctors').innerHTML=(h.doctors||[]).map(d=>`
+      <div class="doc-row"><div class="doc-avatar">${d.name.split(' ').slice(-1)[0][0]}</div>
+      <div><div style="font-weight:600;font-size:.88rem">${d.name}</div><div style="font-size:.75rem;color:var(--grey-400)">${d.specialty}</div></div>
+      <span class="duty-badge ${d.on_duty?'on-duty':'off-duty'}">${d.on_duty?'On Duty':'Off Duty'}</span></div>`).join('');
+    // Action buttons in modal
+    document.getElementById('mActions').innerHTML=`
+      <button onclick="confirmReroute('${h.id}','${h.name}');closeModal()" style="background:var(--stable);color:white;border:none;border-radius:8px;padding:8px 16px;font-size:.83rem;font-weight:700;cursor:pointer">🗺️ Reroute Here</button>`;
+    switchMTab('overview',document.querySelector('.mtab'));
+    document.getElementById('hospModal').classList.add('open');
+  });
+}
+function closeModal(){document.getElementById('hospModal').classList.remove('open')}
+function switchMTab(name,btn){
+  document.querySelectorAll('.mtab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.mtab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('pane-'+name).classList.add('active');
+  if(btn)btn.classList.add('active');
+}
+
+// ── TOAST ──────────────────────────────────────────────────
+function showToast(msg,type='info'){
+  const t=document.getElementById('toast');
+  t.innerHTML=msg; t.className=`toast ${type} show`;
+  setTimeout(()=>t.classList.remove('show'),4000);
+}
+
+// ── HOSPITAL REQUEST (ambulance → hospital) ────────────────
+function sendHospitalRequest(hid, hname){
+  currentRequestHospitalId = hid;
+  fetch('/api/request_hospital',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hospital_id:hid})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        showToast(`📡 Request sent to <strong>${hname}</strong>. Waiting for response…`,'info');
+        showRequestStatus('pending', hname, Date.now());
+        startRequestPoll();
+      }
+    });
+}
+
+function showRequestStatus(status, name, ts){
+  const box = document.getElementById('reqStatusBox');
+  const remaining = status==='pending' ? Math.max(0, 20 - Math.round((Date.now()-ts)/1000)) : 0;
+  const msgs = {
+    pending: `⏳ Awaiting response from <strong>${name}</strong> — hospital has ~${remaining}s to respond.`,
+    accepted: `✅ <strong>${name}</strong> accepted the request! Proceed to this hospital.`,
+    declined: `❌ <strong>${name}</strong> declined. Searching for next nearest hospital…`,
+    redirected: `🔄 Request redirected. Finding next available hospital…`
+  };
+  const cls = {pending:'', accepted:'accepted', declined:'declined', redirected:'declined'};
+  box.innerHTML=`<div class="req-status-box ${cls[status]||''}">${msgs[status]||''}</div>`;
+  box.style.display='block';
+}
+
+function startRequestPoll(){
+  if(requestPollInterval) clearInterval(requestPollInterval);
+  const startTime = Date.now();
+  requestPollInterval = setInterval(()=>{
+    fetch('/api/hospital_request_status').then(r=>r.json()).then(d=>{
+      const elapsed = (Date.now()-startTime)/1000;
+      if(d.status==='accepted'){
+        clearInterval(requestPollInterval);
+        showRequestStatus('accepted', d.hospital_id, startTime);
+        showToast('✅ Hospital accepted! Rerouting now…','success');
+      } else if(d.status==='declined'){
+        clearInterval(requestPollInterval);
+        showRequestStatus('declined', d.hospital_id, startTime);
+        showToast('❌ Declined. Finding next hospital…','warn');
+        setTimeout(autoFindNextHospital, 2000);
+      } else if(elapsed > 20){
+        // 20-second timeout — auto redirect
+        clearInterval(requestPollInterval);
+        showRequestStatus('redirected', 'Hospital', startTime);
+        showToast('⏰ No response in 20s — request redirected. Finding next hospital…','warn');
+        setTimeout(autoFindNextHospital, 2000);
+      }
+    });
+  }, 2000);
+}
+
+function autoFindNextHospital(){
+  // Find the next hospital not currently requested
+  const nextH = allHospitalsCache.find(h=>h.id !== currentRequestHospitalId);
+  if(nextH){
+    showToast(`🔍 Trying next nearest hospital: <strong>${nextH.name}</strong>`,'info');
+    renderNextHospitalOption(nextH);
+  }
+}
+
+function renderNextHospitalOption(h){
+  const box = document.getElementById('reqStatusBox');
+  box.innerHTML += `<div style="margin-top:10px;background:white;border:1.5px solid var(--blue);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px">
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:.9rem">${h.name}</div>
+      <div style="font-size:.75rem;color:var(--grey-400)">📍 ${h.address} · ${h.distance_km} km · ${h.eta_minutes} min ETA</div>
+    </div>
+    <button onclick="sendHospitalRequest('${h.id}','${h.name}')" style="background:var(--blue);color:white;border:none;border-radius:8px;padding:7px 14px;font-size:.82rem;font-weight:700;cursor:pointer">📡 Request This</button>
+  </div>`;
+}
+
+// ── VITALS REFRESH ──────────────────────────────────────────
+function refreshVitals(){
+  const btn=document.getElementById('refreshBtn');
+  btn.textContent='↺ Refreshing…';
+  fetch('/api/vitals').then(r=>r.json()).then(data=>{
+    const v=data.vitals, ai=data.ai;
+    document.getElementById('vhr').textContent=v.hr;
+    document.getElementById('vbp').textContent=`${v.bp_sys}/${v.bp_dia}`;
+    document.getElementById('vspo2').textContent=v.spo2;
+    document.getElementById('vtemp').textContent=v.temp;
+    const arc=document.getElementById('scoreArc');
+    arc.style.strokeDashoffset=239-Math.round(239*ai.stability_score/100);
+    arc.style.stroke={stable:'#22C55E',moderate:'#F59E0B',critical:'#EF4444'}[ai.condition_color];
+    document.getElementById('scoreNum').textContent=ai.stability_score;
+    const b=document.getElementById('condBadge');
+    b.className=`cond-badge cond-${ai.condition_color}`; b.textContent=ai.condition;
+    document.getElementById('aiExp').textContent=ai.explanation;
+    document.getElementById('sideScore').textContent=ai.stability_score+'%';
+    const sb=document.getElementById('sideCond');
+    sb.className=`cond-badge cond-${ai.condition_color}`; sb.textContent=ai.condition;
+
+    // Check critical state — trigger alarm if newly critical
+    isCritical = data.is_critical;
+    const conditionColor = ai.condition_color || 'stable';
+    if(isCritical && conditionColor === 'critical'){
+      document.getElementById('alarmBanner').classList.add('show');
+      if(document.getElementById('criticalNote'))
+        document.getElementById('criticalNote').textContent='⚠ CRITICAL — nearest alternatives shown';
+      playAlarm();
+      // Show hospital recommendations + action buttons (only on first critical trigger)
+      if(!criticalShownOnce){
+        criticalShownOnce = true;
+        showHospitalRecommendations(true);
+        showActionButtons();
+      }
+    } else if(!isCritical || conditionColor !== 'critical'){
+      // Only hide alarm banner, keep recommendations if already shown
+      document.getElementById('alarmBanner').classList.remove('show');
+    }
+
+    // Refresh hospitals from DB
+    fetch('/api/hospitals').then(r=>r.json()).then(newHospList=>{
+      allHospitalsCache = newHospList;
+      hospitals = newHospList;
+      if(isCritical && !hidingRecommended){
+        addHospitalMarkers(newHospList, ai.recommended_hospital_id);
+        renderHospitalCards(newHospList, ai);
+      }
+    });
+
+    document.getElementById('vitalsGrid').classList.add('refreshing');
+    setTimeout(()=>document.getElementById('vitalsGrid').classList.remove('refreshing'),400);
+    showToast('✅ Vitals updated','success');
+  }).catch(()=>showToast('⚠ Refresh failed','info'))
+  .finally(()=>btn.textContent='↺ Refresh Vitals');
+}
+
+// ── RENDER HOSPITAL CARDS ──────────────────────────────────
+function renderHospitalCards(hospList, ai){
+  const recId = ai.recommended_hospital_id;
+  const ranked = ai.hospitals_ranked || hospList.map(h=>({...h,match_score:0}));
+  const top3 = ranked.slice(0,3);
+  const html = top3.map((h,i)=>{
+    const icu=h.icu_beds||0;
+    const icuCls=icu>=6?'g':icu>=3?'y':'r';
+    const recCls=(h.id===recId && !preferredHospital)?'recommended':'';
+    const reroutePanel = i===1 ? `<div class="reroute-inline" id="reroutePanel-${h.id}">
+      <span style="font-size:.85rem;font-weight:600;color:#166534">Reroute to <strong>${h.name}</strong>?</span>
+      <button onclick="confirmReroute('${h.id}','${h.name}')" style="background:var(--stable);color:white;border:none;border-radius:7px;padding:6px 14px;font-size:.82rem;font-weight:700;cursor:pointer">✅ Reroute to this hospital</button>
+      <button onclick="hideReroutePanel('${h.id}')" style="background:var(--grey-100);border:none;border-radius:7px;padding:6px 12px;font-size:.82rem;cursor:pointer">Cancel</button>
+    </div>` : '';
+    return `<div class="hosp-item ${recCls}" onclick="openHospital('${h.id}')" id="hcard-${h.id}">
+      ${h.id===recId&&!preferredHospital?'':''}
+      <div class="h-rank r${i+1}">${i+1}</div>
+      <div>
+        <div class="h-name">${h.name}</div>
+        <div class="h-addr">📍 ${h.address||''}</div>
+        <div style="margin-top:4px">${(h.specialties||[]).map(s=>`<span class="spec-tag">${s}</span>`).join('')}</div>
+      </div>
+      <div class="h-meta">
+        <div class="h-stat"><div class="sv">${h.distance_km} km</div><div class="sk">Distance</div></div>
+        <div class="h-stat"><div class="sv blue">${h.eta_minutes} min</div><div class="sk">ETA</div></div>
+        <div class="h-stat"><div class="sv ${icuCls}">${icu}</div><div class="sk">ICU</div></div>
+        <div class="h-stat"><div class="sv">${h.ventilators||0}</div><div class="sk">Vents</div></div>
+      </div>
+    </div>${reroutePanel}`;
+  }).join('');
+  document.getElementById('hospitalsList').innerHTML=html;
+}
+
+// ── SHOW ACTION BUTTONS (only when critical triggers) ─────
+function showActionButtons(){
+  const row = document.getElementById('actionRow');
+  if(row){
+    row.style.display = 'flex';
+    row.innerHTML = '<button class="btn btn-primary btn-lg" onclick="reroute()">🗺️ Reroute to the Best Hospital</button><button class="btn btn-outline btn-lg" onclick="continueRoute()">➡️ Continue to Current Route</button>';
+  }
+}
+
+// ── SHOW/HIDE HOSPITAL RECOMMENDATIONS (critical only) ─────
+function showHospitalRecommendations(show){
+  const label  = document.getElementById('aiHospLabel');
+  const search = document.getElementById('hospSearchWrap');
+  const list   = document.getElementById('hospitalsList');
+  const disp   = show ? '' : 'none';
+  if(label)  label.style.display  = show ? 'flex' : 'none';
+  if(search) search.style.display = show ? 'flex' : 'none';
+  if(list)   list.style.display   = show ? 'block' : 'none';
+}
+
+// ── FILTER HOSPITALS ───────────────────────────────────────
+function filterHospitals(query){
+  const q = query.toLowerCase().trim();
+  if(!q){ renderHospitalCards(allHospitalsCache, {hospitals_ranked: allHospitalsCache, recommended_hospital_id:''}); return; }
+  const filtered = allHospitalsCache.filter(h=>h.name.toLowerCase().includes(q)||h.address.toLowerCase().includes(q));
+  renderHospitalCards(filtered, {hospitals_ranked: filtered, recommended_hospital_id:''});
+}
+
+// ── REROUTE ────────────────────────────────────────────────
+function reroute(){
+  const ranked = {{ ai.hospitals_ranked | tojson }};
+  const best = ranked && ranked.length ? ranked[0] : (allHospitalsCache[0] || null);
+  if(best){
+    showToast('<strong>🗺️ Rerouting to ' + best.name + '</strong>','success');
+    // Update destination display
+    document.getElementById('recName').textContent    = best.name;
+    document.getElementById('recAddr').textContent    = '📍 ' + (best.address || '');
+    document.getElementById('destLabel').textContent  = '🏥 ' + best.name.substring(0,22) + '…';
+    document.getElementById('sideEta').textContent    = 'ETA ' + best.eta_minutes + ' min';
+    // Hide preferred card and recommendations
+    const prefCard = document.getElementById('preferredHospCard');
+    if(prefCard) prefCard.style.display = 'none';
+    hidingRecommended = true;
+    showHospitalRecommendations(false);
+    document.getElementById('actionRow').innerHTML = '<button class="btn btn-outline btn-lg" onclick="showRecommendedAgain()" style="flex:1">🔄 Change Hospital</button>';
+    // Update map
+    if(allHospitalsCache.length) addHospitalMarkers(allHospitalsCache, best.id);
+    sendHospitalRequest(best.id, best.name);
+  }
+}
+
+function continueRoute(){
+  hidingRecommended = true;
+  showHospitalRecommendations(false);
+  showToast('➡️ Continuing current route — recommendations hidden','info');
+  // Hide action buttons; show only a "Show Again" option
+  document.getElementById('actionRow').innerHTML = '<button class="btn btn-outline btn-lg" onclick="showRecommendedAgain()" style="flex:1">🔄 Show Recommendations Again</button>';
+}
+
+function showRecommendedAgain(){
+  hidingRecommended = false;
+  showHospitalRecommendations(true);
+  showActionButtons();
+}
+
+function confirmReroute(hid, hname){
+  const h = allHospitalsCache.find(x=>x.id===hid) || {name:hname,address:'',eta_minutes:'?',icu_beds:'—',ventilators:'—',contact:'—'};
+  showToast('🗺️ Rerouting to <strong>' + h.name + '</strong>…','success');
+
+  // ── Update sidebar destination card ────────────────────────
+  document.getElementById('recName').textContent    = h.name;
+  document.getElementById('recAddr').textContent    = '📍 ' + (h.address || '');
+  document.getElementById('sideEta').textContent    = 'ETA ' + (h.eta_minutes || '?') + ' min';
+  document.getElementById('destLabel').textContent  = '🏥 ' + h.name.substring(0,22) + '…';
+  if(document.getElementById('recIcu'))     document.getElementById('recIcu').textContent    = h.icu_beds || '—';
+  if(document.getElementById('recVents'))   document.getElementById('recVents').textContent  = h.ventilators || '—';
+  if(document.getElementById('recContact')) document.getElementById('recContact').textContent = '📞 ' + (h.contact || '—');
+
+  // ── Update map ──────────────────────────────────────────────
+  addHospitalMarkers(allHospitalsCache, hid);
+
+  // ── Hide preferred hospital card + its section label ───────
+  const prefCard = document.getElementById('preferredHospCard');
+  if(prefCard) prefCard.style.display = 'none';
+  document.querySelectorAll('.section-label').forEach(function(lbl){
+    if(lbl.textContent.includes('Destination Hospital')) lbl.style.display = 'none';
+  });
+
+  // ── Hide AI recommendations section ────────────────────────
+  hidingRecommended = true;
+  showHospitalRecommendations(false);
+
+  // ── Replace action row with just "Change Hospital" ─────────
+  document.getElementById('actionRow').innerHTML = '<button class="btn btn-outline btn-lg" onclick="showRecommendedAgain()" style="flex:1">🔄 Change Hospital</button>';
+
+  sendHospitalRequest(hid, hname);
+  hideReroutePanel(hid);
+}
+
+function hideReroutePanel(hid){
+  const p = document.getElementById('reroutePanel-'+hid);
+  if(p) p.classList.remove('show');
+}
+
+// Show reroute panel on 2nd hospital click (without opening modal)
+document.addEventListener('click', e=>{
+  const card = e.target.closest('.hosp-item');
+  if(!card) return;
+  const hid = card.id.replace('hcard-','');
+  const panel = document.getElementById('reroutePanel-'+hid);
+  if(panel){ panel.classList.toggle('show'); e.stopPropagation(); }
+});
+
+// ── ALARM ──────────────────────────────────────────────────
+let alarmCtx = null;
+function playAlarm(){
+  try{
+    alarmCtx = alarmCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const osc = alarmCtx.createOscillator();
+    const gain = alarmCtx.createGain();
+    osc.connect(gain); gain.connect(alarmCtx.destination);
+    osc.frequency.setValueAtTime(880, alarmCtx.currentTime);
+    osc.frequency.setValueAtTime(440, alarmCtx.currentTime+0.2);
+    gain.gain.setValueAtTime(0.3, alarmCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, alarmCtx.currentTime+0.5);
+    osc.start(); osc.stop(alarmCtx.currentTime+0.5);
+  }catch(e){}
+}
+
+// Show alarm ONLY if AI condition is truly critical (not just vitals threshold)
+const initialCondition = "{{ ai.condition_color }}";
+if(isCritical && initialCondition === 'critical') {
+  document.getElementById('alarmBanner').classList.add('show');
+}
+
+// Auto-refresh vitals every 15s
+setInterval(refreshVitals, 15000);
+</script>
+</body>
+</html>

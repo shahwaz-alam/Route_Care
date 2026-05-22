@@ -1,0 +1,50 @@
+[
+  {
+    "id": "H001",
+    "name": "Apollo Trauma Center",
+    "address": "21 Greams Road, Chennai",
+    "distance_km": 2.4,
+    "eta_minutes": 6,
+    "icu_beds": 8,
+    "ventilators": 5,
+    "trauma_unit": true,
+    "cardiac_unit": true,
+    "specialties": ["Trauma", "Cardiac", "Neuro", "Burns"],
+    "contact": "+91-44-2829-0200",
+    "lat": 13.0607,
+    "lng": 80.2496,
+    "rating": 4.8
+  },
+  {
+    "id": "H002",
+    "name": "MIOT International",
+    "address": "4/112, Mount Poonamallee Rd",
+    "distance_km": 5.1,
+    "eta_minutes": 12,
+    "icu_beds": 3,
+    "ventilators": 2,
+    "trauma_unit": true,
+    "cardiac_unit": false,
+    "specialties": ["Ortho", "Trauma", "General Surgery"],
+    "contact": "+91-44-4200-2288",
+    "lat": 13.0418,
+    "lng": 80.1765,
+    "rating": 4.5
+  },
+  {
+    "id": "H003",
+    "name": "Fortis Malar Hospital",
+    "address": "52 1st Main Rd, Gandhi Nagar",
+    "distance_km": 3.8,
+    "eta_minutes": 9,
+    "icu_beds": 5,
+    "ventilators": 3,
+    "trauma_unit": false,
+    "cardiac_unit": true,
+    "specialties": ["Cardiac", "Neuro", "Oncology"],
+    "contact": "+91-44-4289-2288",
+    "lat": 13.0201,
+    "lng": 80.2568,
+    "rating": 4.6
+  }
+]

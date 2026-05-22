@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RouteCare — Patient Information</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    .progress-bar-wrap{background:var(--grey-200);border-radius:20px;height:6px;margin:16px 0 28px;overflow:hidden}
+    .progress-bar-fill{height:100%;width:33%;background:linear-gradient(90deg,var(--blue),#60A5FA);border-radius:20px;transition:width .4s ease}
+    .step-indicator{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+    .step{font-size:0.75rem;color:var(--grey-400);font-weight:500}
+    .step.active{color:var(--blue);font-weight:700}
+    .form-card{max-width:680px;margin:0 auto}
+    .section-header{display:flex;align-items:center;gap:10px;margin:24px 0 14px;padding-bottom:10px;border-bottom:1px solid var(--grey-200)}
+    .section-header .icon{width:32px;height:32px;background:var(--blue-light);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem}
+    .section-header h3{font-size:0.88rem;font-weight:700;color:var(--blue-dark)}
+    .form-actions{display:flex;gap:12px;margin-top:28px;padding-top:20px;border-top:1px solid var(--grey-200)}
+    .location-input-wrap{position:relative}
+    .location-input-wrap input{padding-right:110px}
+    .loc-btn{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--blue);color:white;border:none;border-radius:6px;padding:6px 11px;font-size:.75rem;cursor:pointer;display:flex;align-items:center;gap:4px;font-weight:600}
+    .loc-btn:hover{background:#1D4ED8}
+    .loc-btn:disabled{opacity:.6;cursor:not-allowed}
+    .loc-status{font-size:.72rem;margin-top:5px;min-height:16px;color:var(--grey-400)}
+    .loc-status.success{color:var(--stable)}
+    .loc-status.error{color:var(--critical)}
+    #locationMap{height:190px;border-radius:10px;margin-top:10px;display:none;border:1px solid var(--grey-200)}
+  </style>
+</head>
+<body class="form-page">
+<nav class="navbar">
+  <div class="nav-brand"><div class="brand-icon">🚑</div>Route<span class="accent">Care</span></div>
+  <div class="nav-links">
+    <span class="nav-badge">🟢 Ambulance Mode</span>
+    <div class="nav-user"><div class="avatar">{{ session.user_id[0] }}</div><span>{{ session.user_id }}</span></div>
+    <a href="/logout" class="btn-logout">Logout</a>
+  </div>
+</nav>
+
+<div class="page-wrapper">
+  <div class="form-card">
+    <div class="page-header">
+      <div class="label">Step 1 of 3</div>
+      <h1>Patient Information</h1>
+      <p>Enter patient details before starting emergency monitoring</p>
+    </div>
+    <div class="step-indicator">
+      <span class="step active">① Patient Info</span>
+      <span style="color:var(--grey-200)">——</span>
+      <span class="step">② Emergency Monitor</span>
+      <span style="color:var(--grey-200)">——</span>
+      <span class="step">③ Hospital Route</span>
+    </div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill"></div></div>
+
+    <div class="card">
+      <form method="POST" action="/patient">
+
+        <!-- Personal Details -->
+        <div class="section-header"><div class="icon">👤</div><h3>Personal Details</h3></div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Full Name</label>
+            <input type="text" name="name" class="form-control" placeholder="Patient full name" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Age</label>
+            <input type="number" name="age" class="form-control" placeholder="Age in years" min="0" max="120" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Gender</label>
+            <select name="gender" class="form-control" required>
+              <option value="">Select gender</option>
+              <option>Male</option><option>Female</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Blood Group</label>
+            <select name="blood_group" class="form-control" required>
+              <option value="">Select blood group</option>
+              <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+              <option>O+</option><option>O-</option><option>AB+</option><option>AB-</option>
+              <option>Unknown</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contact Number</label>
+            <input type="tel" name="contact" class="form-control" placeholder="Emergency contact" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Emergency Type</label>
+            <select name="emergency" class="form-control" required>
+              <option value="">Select emergency type</option>
+              <option>Cardiac Arrest</option><option>Stroke</option>
+              <option>Road Accident / Trauma</option><option>Respiratory Distress</option>
+              <option>Severe Burns</option><option>Overdose / Poisoning</option>
+              <option>Seizure</option><option>General Emergency</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Medical Info -->
+        <div class="section-header"><div class="icon">🩺</div><h3>Medical Information</h3></div>
+        <div class="form-group full">
+          <label class="form-label">Current Symptoms</label>
+          <textarea name="symptoms" class="form-control"
+            placeholder="Describe visible symptoms (e.g. chest pain, unconscious, difficulty breathing...)" rows="3"></textarea>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Known Medical Conditions</label>
+          <textarea name="conditions" class="form-control"
+            placeholder="Known conditions, allergies, medications (e.g. Diabetes, Hypertension, Aspirin allergy...)" rows="2"></textarea>
+        </div>
+
+        <!-- ═══ HOSPITAL DESTINATION ═══ -->
+        <div class="section-header"><div class="icon">🏥</div><h3>Hospital Destination</h3></div>
+
+        <div class="form-group full">
+          <label class="form-label">Enter Hospital <span style="color:var(--grey-400);font-weight:400">(preferred destination)</span></label>
+          <input type="text" name="preferred_hospital" id="preferredHospital" class="form-control"
+            placeholder="e.g. Apollo Trauma Center, City General Hospital…" autocomplete="off" />
+        </div>
+
+        <!-- Ambulance Location -->
+        <div class="form-group full" style="margin-top:16px">
+          <label class="form-label">Ambulance / Pickup Location</label>
+          <div class="location-input-wrap">
+            <input type="text" name="pickup_location" id="pickupLocation" class="form-control"
+              placeholder="Type address or click 📍 Use GPS…" />
+            <button type="button" class="loc-btn" id="gpsBtn" onclick="fetchCurrentLocation()">
+              📍 Use GPS
+            </button>
+          </div>
+          <input type="hidden" name="pickup_lat" id="pickupLat" value="" />
+          <input type="hidden" name="pickup_lng" id="pickupLng" value="" />
+          <div class="loc-status" id="locStatus">You can type an address manually or click "Use GPS" to auto-fill.</div>
+          <div id="locationMap"></div>
+        </div>
+
+        <div class="form-actions">
+          <a href="/" class="btn btn-outline">← Back</a>
+          <button type="submit" class="btn btn-primary" style="flex:1;">Save &amp; Start Monitoring →</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">RouteCare Emergency Response System — Hackathon Demo</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+var miniMap = null, miniMarker = null;
+
+function fetchCurrentLocation(highAccuracy) {
+  if (highAccuracy === undefined) highAccuracy = true;
+  var btn    = document.getElementById('gpsBtn');
+  var status = document.getElementById('locStatus');
+
+  if (!navigator.geolocation) {
+    status.textContent = '⚠ Geolocation not supported by this browser. Please type your address manually.';
+    status.className = 'loc-status error';
+    return;
+  }
+
+  btn.innerHTML = '⏳ Locating…';
+  btn.disabled = true;
+  status.textContent = highAccuracy ? 'Requesting GPS location…' : 'Retrying with network location…';
+  status.className = 'loc-status';
+
+  var opts = {
+    enableHighAccuracy: highAccuracy,
+    timeout: highAccuracy ? 12000 : 8000,
+    maximumAge: highAccuracy ? 0 : 60000
+  };
+
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      var lat = pos.coords.latitude.toFixed(6);
+      var lng = pos.coords.longitude.toFixed(6);
+      document.getElementById('pickupLat').value = lat;
+      document.getElementById('pickupLng').value = lng;
+      status.textContent = 'Resolving address…';
+      status.className = 'loc-status';
+      fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&addressdetails=1', {
+        headers: { 'Accept-Language': 'en' }
+      }).then(function(r) { return r.json(); })
+        .then(function(data) {
+          var addr = data.display_name || (lat + ', ' + lng);
+          document.getElementById('pickupLocation').value = addr;
+          status.textContent = '✅ ' + addr.substring(0, 90) + (addr.length > 90 ? '…' : '');
+          status.className = 'loc-status success';
+        }).catch(function() {
+          document.getElementById('pickupLocation').value = lat + ', ' + lng;
+          status.textContent = '✅ GPS: ' + lat + ', ' + lng;
+          status.className = 'loc-status success';
+        });
+      showMiniMap(parseFloat(lat), parseFloat(lng));
+      btn.innerHTML = '✅ Located';
+      btn.disabled = false;
+    },
+    function(err) {
+      if (highAccuracy && (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE)) {
+        fetchCurrentLocation(false);
+        return;
+      }
+      btn.innerHTML = '📍 Use GPS';
+      btn.disabled = false;
+      var msg = '';
+      if (err.code === 1)      msg = '⚠ Permission denied. Allow location access in browser settings and try again.';
+      else if (err.code === 2) msg = '⚠ Location unavailable. Please type your address manually.';
+      else if (err.code === 3) msg = '⚠ GPS timed out. Please type your address manually.';
+      else                     msg = '⚠ GPS error. Please enter your address manually.';
+      status.textContent = msg;
+      status.className = 'loc-status error';
+    },
+    opts
+  );
+}
+
+function showMiniMap(lat, lng) {
+  var mapEl = document.getElementById('locationMap');
+  mapEl.style.display = 'block';
+  if (!miniMap) {
+    miniMap = L.map('locationMap').setView([lat, lng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap', maxZoom: 19
+    }).addTo(miniMap);
+    var icon = L.divIcon({
+      html: '<div style="background:#EF4444;color:white;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.3)">🚑</div>',
+      iconSize: [30, 30], className: ''
+    });
+    miniMarker = L.marker([lat, lng], { icon: icon }).addTo(miniMap)
+                   .bindPopup('🚑 Your Location').openPopup();
+  } else {
+    miniMap.setView([lat, lng], 15);
+    miniMarker.setLatLng([lat, lng]);
+    miniMap.invalidateSize();
+  }
+}
+
+// Auto-attempt GPS silently on page load
+window.addEventListener('load', function() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      var lat = pos.coords.latitude.toFixed(6);
+      var lng = pos.coords.longitude.toFixed(6);
+      document.getElementById('pickupLat').value = lat;
+      document.getElementById('pickupLng').value = lng;
+      fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var addr = d.display_name || (lat + ', ' + lng);
+          document.getElementById('pickupLocation').value = addr;
+          var s = document.getElementById('locStatus');
+          s.textContent = '✅ Auto-detected: ' + addr.substring(0, 80) + (addr.length > 80 ? '…' : '');
+          s.className = 'loc-status success';
+          document.getElementById('gpsBtn').innerHTML = '✅ Located';
+        }).catch(function() {
+          document.getElementById('pickupLocation').value = lat + ', ' + lng;
+        });
+      showMiniMap(parseFloat(lat), parseFloat(lng));
+    },
+    function() { /* silent — user can click button manually */ },
+    { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+  );
+});
+</script>
+</body>
+</html>

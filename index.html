@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>RouteCare — AI Emergency Response</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+  <style>
+    .landing-nav{display:flex;align-items:center;justify-content:space-between;padding:20px 40px}
+    .landing-nav .brand{font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:white;display:flex;align-items:center;gap:10px}
+    .landing-nav .brand .dot{color:var(--lime)}
+    .card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:780px;margin:0 auto;padding:0 24px 60px}
+    .feat-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-md);padding:24px;text-align:center;transition:all .2s}
+    .feat-card:hover{background:rgba(255,255,255,.09);transform:translateY(-3px)}
+    .feat-card .icon{font-size:2rem;margin-bottom:12px}
+    .feat-card h3{color:white;font-size:.95rem;margin-bottom:6px}
+    .feat-card p{color:rgba(255,255,255,.5);font-size:.8rem;line-height:1.5}
+    .btn-ghost-white{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:white;border-radius:10px;padding:13px 24px;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+    .btn-ghost-white:hover{background:rgba(255,255,255,.15)}
+    .portal-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:680px;margin:0 auto 40px}
+    .portal-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:24px;text-align:center;transition:all .2s}
+    .portal-card:hover{background:rgba(255,255,255,.1);transform:translateY(-2px)}
+    .portal-card .p-icon{font-size:2.4rem;margin-bottom:12px}
+    .portal-card .p-title{font-family:var(--font-head);font-size:1rem;font-weight:700;color:white;margin-bottom:6px}
+    .portal-card .p-sub{font-size:.78rem;color:rgba(255,255,255,.45);margin-bottom:18px;line-height:1.5}
+    .portal-card .p-actions{display:flex;flex-direction:column;gap:8px}
+    .btn-lime-sm{background:var(--lime);color:var(--dark);border-radius:8px;padding:10px 18px;font-size:.85rem;font-weight:700;text-decoration:none;display:block;transition:all .2s;border:none;cursor:pointer}
+    .btn-lime-sm:hover{background:var(--lime-dark)}
+    .btn-outline-white{background:transparent;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.75);border-radius:8px;padding:9px 18px;font-size:.82rem;font-weight:600;text-decoration:none;display:block;transition:all .2s}
+    .btn-outline-white:hover{background:rgba(255,255,255,.08);color:white}
+    @media(max-width:640px){.card-grid{grid-template-columns:1fr}.portal-cards{grid-template-columns:1fr}.hero-title{font-size:2.2rem}.hero-stats{gap:20px}}
+  </style>
+</head>
+<body>
+<div class="landing-hero">
+  <!-- Minimal nav — brand only, no login/signup buttons -->
+  <nav class="landing-nav">
+    <div class="brand">
+      <span>🚑</span> Route<span class="dot">Care</span>
+    </div>
+  </nav>
+
+  <div class="hero-body">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      AI-Powered Emergency Response
+    </div>
+
+    <h1 class="hero-title">
+      Smarter Routes.<br>
+      <span class="accent">Faster Care.</span><br>
+      <span class="blue-accent">Saved Lives.</span>
+    </h1>
+
+    <p class="hero-sub">
+      RouteCare uses real-time vitals monitoring and AI-driven decision-making
+      to intelligently reroute ambulances to the best available hospital —
+      reducing response time and improving patient outcomes.
+    </p>
+
+    <!-- Portal entry cards -->
+    <div class="portal-cards">
+      <div class="portal-card">
+        <div class="p-icon">🚑</div>
+        <div class="p-title">Ambulance Unit</div>
+        <div class="p-sub">Monitor patient vitals in transit and get AI-powered hospital routing</div>
+        <div class="p-actions">
+          <a href="/login?role=ambulance" class="btn-lime-sm">Login</a>
+          <a href="/signup?role=ambulance" class="btn-outline-white">Create Account</a>
+        </div>
+      </div>
+      <div class="portal-card">
+        <div class="p-icon">🏥</div>
+        <div class="p-title">Hospital</div>
+        <div class="p-sub">Receive incoming emergency alerts and manage your facilities in real-time</div>
+        <div class="p-actions">
+          <a href="/login?role=hospital" class="btn-lime-sm">Login</a>
+          <a href="/signup?role=hospital" class="btn-outline-white">Register Hospital</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-chips">
+      <span class="feature-chip">⚡ Live Vitals Monitoring</span>
+      <span class="feature-chip">🤖 AI Stability Scoring</span>
+      <span class="feature-chip">🗺️ Smart Rerouting</span>
+      <span class="feature-chip">📡 Hospital Alerts</span>
+      <span class="feature-chip">🫀 Critical Detection</span>
+    </div>
+
+    <div class="hero-stats">
+      <div class="hero-stat-item">
+        <div class="hero-stat-num">2.4<span>x</span></div>
+        <div class="hero-stat-label">Faster Response</div>
+      </div>
+      <div class="hero-stat-item">
+        <div class="hero-stat-num">98<span>%</span></div>
+        <div class="hero-stat-label">Routing Accuracy</div>
+      </div>
+      <div class="hero-stat-item">
+        <div class="hero-stat-num">24<span>/7</span></div>
+        <div class="hero-stat-label">AI Monitoring</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-grid">
+    <div class="feat-card">
+      <div class="icon">🩺</div>
+      <h3>Real-Time Vitals</h3>
+      <p>Monitor HR, BP, SpO2, and temperature continuously during transit</p>
+    </div>
+    <div class="feat-card">
+      <div class="icon">🧠</div>
+      <h3>AI Decision Engine</h3>
+      <p>Instant stability scoring with contextual explanation for every patient</p>
+    </div>
+    <div class="feat-card">
+      <div class="icon">🏥</div>
+      <h3>Hospital Matching</h3>
+      <p>Ranks all registered hospitals by ICU availability, ETA and specialty match</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

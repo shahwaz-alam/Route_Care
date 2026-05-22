@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>RouteCare — Create Account</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+  <style>
+    .role-fields{display:none}.role-fields.show{display:contents}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .form-grid .full{grid-column:1/-1}
+    .check-row{display:flex;align-items:center;gap:10px;font-size:.88rem;font-weight:500;color:var(--grey-700)}
+    .check-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--blue);cursor:pointer}
+    .section-divider{grid-column:1/-1;border-top:1px solid var(--grey-200);padding-top:14px;margin-top:4px}
+    .section-divider .sec-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:12px}
+  </style>
+</head>
+<body>
+<div class="login-page">
+  <a href="/" class="back-link">← Home</a>
+  <div class="login-box" style="max-width:520px;width:100%">
+    <div class="login-logo">
+      <div class="icon">🚑</div>
+      <span>Route<span style="color:var(--blue)">Care</span></span>
+    </div>
+    <h2 class="login-title">Create Account</h2>
+    <p class="login-sub">Register your ambulance unit or hospital on the RouteCare network</p>
+
+    <div class="toggle-tabs">
+      <button class="toggle-tab {% if role=='ambulance' %}active{% endif %}" onclick="setRole('ambulance')" type="button">🚑 Ambulance</button>
+      <button class="toggle-tab {% if role=='hospital' %}active{% endif %}" onclick="setRole('hospital')" type="button">🏥 Hospital</button>
+    </div>
+
+    {% if error %}<div class="error-msg">⚠️ {{ error }}</div>{% endif %}
+    {% if success %}
+    <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:12px 16px;color:#166534;font-size:.87rem;margin-bottom:16px;display:flex;align-items:center;gap:10px">
+      ✅ {{ success }} <a href="/login" style="color:#166534;font-weight:700;margin-left:6px">Sign In →</a>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/signup">
+      <input type="hidden" name="role" id="roleInput" value="{{ role }}"/>
+      <div class="form-grid">
+
+        <!-- Common fields -->
+        <div class="form-group full">
+          <label class="form-label" id="nameLbl">Unit / Hospital Name</label>
+          <input type="text" name="name" class="form-control" placeholder="e.g. Apollo Trauma Center" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">User ID</label>
+          <input type="text" name="user_id" class="form-control" placeholder="e.g. AMB003 or HSP010" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label" id="pwLbl">Password</label>
+          <input type="password" name="password" class="form-control" placeholder="Create a password" required/>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Confirm Password</label>
+          <input type="password" name="confirm" class="form-control" placeholder="Repeat password" required/>
+        </div>
+
+        <!-- Ambulance-only -->
+        <div class="form-group full role-fields ambulance-field {% if role=='ambulance' %}show{% endif %}">
+          <label class="form-label">Vehicle Registration Number</label>
+          <input type="text" name="vehicle" class="form-control" placeholder="e.g. KA-01-9999"/>
+        </div>
+
+        <!-- Hospital-only -->
+        <div class="section-divider role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <div class="sec-title">🏥 Hospital Details — visible to all ambulances</div>
+        </div>
+
+        <div class="form-group full role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <label class="form-label">Full Address</label>
+          <input type="text" name="address" class="form-control" placeholder="Street, Area, City"/>
+        </div>
+        <div class="form-group role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <label class="form-label">Contact Number</label>
+          <input type="text" name="contact" class="form-control" placeholder="+91-44-XXXX-XXXX"/>
+        </div>
+        <div class="form-group role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <label class="form-label">Specialties (comma-separated)</label>
+          <input type="text" name="specialties" class="form-control" placeholder="Cardiac, Trauma, Neuro"/>
+        </div>
+        <div class="form-group role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <label class="form-label">Distance from city centre (km)</label>
+          <input type="number" name="distance_km" class="form-control" value="5.0" step="0.1" min="0"/>
+        </div>
+        <div class="form-group role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <label class="form-label">Average ETA (minutes)</label>
+          <input type="number" name="eta_minutes" class="form-control" value="12" min="1"/>
+        </div>
+        <div class="form-group role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <label class="form-label">ICU Beds Available</label>
+          <input type="number" name="icu_beds" class="form-control" value="5" min="0"/>
+        </div>
+        <div class="form-group role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <label class="form-label">Ventilators</label>
+          <input type="number" name="ventilators" class="form-control" value="3" min="0"/>
+        </div>
+        <div class="form-group role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <label class="form-label">Latitude</label>
+          <input type="number" name="lat" class="form-control" value="13.0500" step="0.0001"/>
+        </div>
+        <div class="form-group role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <label class="form-label">Longitude</label>
+          <input type="number" name="lng" class="form-control" value="80.2500" step="0.0001"/>
+        </div>
+        <div class="form-group role-fields hospital-field {% if role=='hospital' %}show{% endif %}">
+          <label class="form-label" style="margin-bottom:8px">Units Available</label>
+          <div style="display:flex;gap:20px;flex-wrap:wrap">
+            <label class="check-row"><input type="checkbox" name="trauma_unit"/> Trauma Unit</label>
+            <label class="check-row"><input type="checkbox" name="cardiac_unit" checked/> Cardiac Unit</label>
+          </div>
+        </div>
+
+      </div>
+      <button type="submit" class="btn btn-primary btn-full btn-lg" style="margin-top:16px">
+        Create Account →
+      </button>
+    </form>
+
+    <p style="text-align:center;margin-top:16px;font-size:.83rem;color:var(--grey-400)">
+      Already have an account? <a href="/login" style="color:var(--blue);font-weight:600">Sign in →</a>
+    </p>
+  </div>
+</div>
+<script>
+function setRole(r){
+  document.getElementById('roleInput').value=r;
+  document.querySelectorAll('.toggle-tab').forEach(t=>t.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.ambulance-field').forEach(f=>f.classList.toggle('show',r==='ambulance'));
+  document.querySelectorAll('.hospital-field').forEach(f=>f.classList.toggle('show',r==='hospital'));
+  document.getElementById('nameLbl').textContent=r==='hospital'?'Hospital Name':'Unit Name';
+}
+</script>
+</body>
+</html>

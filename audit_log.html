@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>RouteCare — AI Decision Audit Log</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+  <style>
+    body{background:var(--grey-100)}
+    .audit-wrap{max-width:1100px;margin:0 auto;padding:28px 24px}
+    .log-table{width:100%;border-collapse:collapse;background:white;border-radius:var(--radius-md);overflow:hidden;box-shadow:var(--shadow-sm)}
+    .log-table th{background:var(--dark);color:rgba(255,255,255,.8);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:12px 14px;text-align:left}
+    .log-table td{padding:11px 14px;font-size:.82rem;border-bottom:1px solid var(--grey-100);vertical-align:top;color:var(--grey-800)}
+    .log-table tr:last-child td{border-bottom:none}
+    .log-table tr:hover td{background:var(--grey-50)}
+    .cond-pill{display:inline-block;border-radius:20px;padding:2px 9px;font-size:.68rem;font-weight:700;text-transform:uppercase}
+    .cond-stable{background:var(--stable-bg);color:var(--stable)}
+    .cond-moderate{background:var(--moderate-bg);color:var(--moderate)}
+    .cond-critical{background:var(--critical-bg);color:var(--critical)}
+    .guard-pill{display:inline-block;border-radius:4px;padding:2px 7px;font-size:.65rem;font-weight:700;margin:2px;background:#FEE2E2;color:#991B1B}
+    .warn-pill{background:#FEF3C7;color:#92400E}
+    .edge-pill{display:inline-block;border-radius:4px;padding:2px 7px;font-size:.65rem;font-weight:600;margin:2px;background:#FFF7ED;color:#9A3412}
+    .score-bar-wrap{background:var(--grey-200);border-radius:20px;height:6px;width:80px;display:inline-block;vertical-align:middle;margin-left:6px}
+    .score-bar-fill{height:100%;border-radius:20px}
+    .expand-row{display:none;background:#F8FAFC}
+    .expand-row td{padding:12px 24px;font-size:.78rem;color:var(--grey-600);line-height:1.7}
+    .expand-row.open{display:table-row}
+    .clickable{cursor:pointer}
+    .clickable:hover td{background:var(--blue-light)!important}
+    .vitals-inline{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px}
+    .vi{background:white;border:1px solid var(--grey-200);border-radius:6px;padding:5px 10px;font-size:.75rem}
+    .vi strong{color:var(--dark)}
+  </style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">
+    <div class="brand-icon">📋</div>
+    Route<span class="accent">Care</span>
+    <span style="font-size:.7rem;background:var(--grey-100);color:var(--grey-600);border-radius:4px;padding:2px 8px;font-weight:600">AUDIT LOG</span>
+  </div>
+  <div class="nav-links">
+    <a href="{{ '/hospital' if role == 'hospital' else '/emergency' }}" class="btn-logout">← Back</a>
+    <a href="/logout" class="btn-logout">Logout</a>
+  </div>
+</nav>
+
+<div class="audit-wrap">
+  <div style="margin-bottom:20px">
+    <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--blue);margin-bottom:4px">Compliance &amp; Audit</div>
+    <h1 style="font-size:1.5rem;color:var(--dark)">AI Decision Audit Trail</h1>
+    <p style="font-size:.85rem;color:var(--grey-400);margin-top:4px">
+      Every AI routing decision is logged immutably. Click any row to expand the full agent trace.
+      &nbsp;·&nbsp; <strong>{{ logs|length }}</strong> records shown.
+    </p>
+  </div>
+
+  {% if not logs %}
+  <div style="background:white;border-radius:var(--radius-md);padding:48px;text-align:center;color:var(--grey-400)">
+    <div style="font-size:2.5rem;margin-bottom:12px">📭</div>
+    <div style="font-size:1rem;font-weight:600;color:var(--grey-600)">No audit records yet</div>
+    <div style="font-size:.85rem;margin-top:6px">Records appear as soon as an ambulance dispatches a patient.</div>
+  </div>
+  {% else %}
+  <table class="log-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Timestamp (UTC)</th>
+        <th>Patient</th>
+        <th>Emergency</th>
+        <th>Vitals Summary</th>
+        <th>Score</th>
+        <th>Condition</th>
+        <th>Guardrails</th>
+        <th>Edge Cases</th>
+        <th>Routed To</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+      <tr class="clickable" onclick="toggleExpand({{ loop.index }})">
+        <td style="color:var(--grey-400);font-size:.75rem">{{ log.id }}</td>
+        <td style="white-space:nowrap;font-family:monospace;font-size:.76rem">{{ log.timestamp }}</td>
+        <td>
+          <div style="font-weight:600">{{ log.patient_name }}</div>
+          <div style="font-size:.72rem;color:var(--grey-400)">{{ log.ambulance_uid }}</div>
+        </td>
+        <td>{{ log.emergency_type }}</td>
+        <td>
+          <div class="vitals-inline">
+            <span class="vi">❤️ <strong>{{ log.vitals.get('hr','?') }}</strong> bpm</span>
+            <span class="vi">🩸 <strong>{{ log.vitals.get('bp_sys','?') }}/{{ log.vitals.get('bp_dia','?') }}</strong></span>
+            <span class="vi">🫁 <strong>{{ log.vitals.get('spo2','?') }}</strong>%</span>
+            <span class="vi">🌡️ <strong>{{ log.vitals.get('temp','?') }}</strong>°C</span>
+          </div>
+        </td>
+        <td>
+          <span style="font-weight:700;font-size:.95rem">{{ log.stability_score }}</span>
+          <span class="score-bar-wrap"><span class="score-bar-fill" style="width:{{ log.stability_score }}%;background:{{ '#22C55E' if log.stability_score >= 70 else '#F59E0B' if log.stability_score >= 40 else '#EF4444' }}"></span></span>
+        </td>
+        <td><span class="cond-pill cond-{{ log.condition|lower }}">{{ log.condition }}</span></td>
+        <td>
+          {% for g in log.guardrails %}
+            <span class="guard-pill {% if g.severity != 'CRITICAL' %}warn-pill{% endif %}">{{ g.id.replace('GR-','') }}</span>
+          {% else %}
+            <span style="color:var(--grey-400);font-size:.75rem">None</span>
+          {% endfor %}
+        </td>
+        <td>
+          {% for f in log.edge_flags %}
+            <span class="edge-pill">{{ f.replace('_',' ')[:20] }}</span>
+          {% else %}
+            <span style="color:var(--grey-400);font-size:.75rem">None</span>
+          {% endfor %}
+        </td>
+        <td style="font-weight:600;color:var(--blue)">{{ log.recommended_hospital or '—' }}</td>
+      </tr>
+      <!-- Expanded detail row -->
+      <tr class="expand-row" id="expand-{{ loop.index }}">
+        <td colspan="10">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div>
+              <div style="font-weight:700;color:var(--blue);margin-bottom:8px;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px">Vital-by-vital Score Breakdown</div>
+              {% for line in log.breakdown %}
+              <div style="padding:3px 0;border-bottom:1px solid var(--grey-200)">{{ line }}</div>
+              {% endfor %}
+            </div>
+            <div>
+              <div style="font-weight:700;color:var(--blue);margin-bottom:8px;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px">Active Guardrails Detail</div>
+              {% for g in log.guardrails %}
+              <div style="margin-bottom:8px;padding:8px;border-radius:6px;background:{% if g.severity=='CRITICAL' %}#FEF2F2{% else %}#FFFBEB{% endif %}">
+                <strong style="color:{% if g.severity=='CRITICAL' %}#991B1B{% else %}#92400E{% endif %}">{{ g.id }} [{{ g.severity }}]</strong>
+              </div>
+              {% else %}
+              <div style="color:var(--grey-400)">No guardrails triggered — vitals within safe parameters.</div>
+              {% endfor %}
+              {% if log.edge_flags %}
+              <div style="font-weight:700;color:var(--blue);margin:12px 0 8px;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px">Edge Cases Detected</div>
+              {% for f in log.edge_flags %}
+              <div style="padding:4px 0;color:#9A3412">🔀 {{ f.replace('_',' ') }}</div>
+              {% endfor %}
+              {% endif %}
+            </div>
+          </div>
+          <div style="margin-top:12px;font-size:.72rem;color:var(--grey-400);font-family:monospace">
+            Decision version: {{ log.decision_version }} &nbsp;·&nbsp; Record ID: {{ log.id }} &nbsp;·&nbsp; Append-only — cannot be modified
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div style="margin-top:16px;font-size:.75rem;color:var(--grey-400);text-align:center">
+    RouteCare Audit Log — append-only, tamper-evident &nbsp;·&nbsp; Decision version v3.0 &nbsp;·&nbsp;
+    ICD-10 guardrails per WHO / AHA / BLS standards
+  </div>
+</div>
+
+<script>
+function toggleExpand(idx){
+  const row = document.getElementById('expand-'+idx);
+  if(row) row.classList.toggle('open');
+}
+</script>
+</body>
+</html>
